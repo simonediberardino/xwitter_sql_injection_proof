@@ -1,2 +1,8 @@
+node_modules/
+.idea/
 *.exe
 xwitter-api
+.env
+.env.*
+*.db
+data/

@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+frontend/dist/
+*.exe
+*.test
+*.out
+xwitter-api
+backend/xwitter-api
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs and local data
+*.log
+npm-debug.log*
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE and OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Tooling caches
+.vite/
+coverage/
+.cache/
+tmp/
+temp/
+__pycache__/
+*.pyc
