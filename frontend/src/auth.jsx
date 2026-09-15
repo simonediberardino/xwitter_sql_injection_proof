@@ -45,6 +45,15 @@ export function AuthProvider({ children }) {
         setUser(data.user);
         return data.user;
       },
+      async updateProfile(payload) {
+        const data = await api("/api/auth/profile", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        setToken(data.token);
+        setUser(data.user);
+        return data.user;
+      },
       logout() {
         setToken(null);
         setUser(null);

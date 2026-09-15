@@ -245,6 +245,78 @@ func (r *UserRepository) CountPosts(
 	return user, nil
 }
 
+func (r *UserRepository) UpdateProfile(
+	ctx context.Context,
+	user dto.User,
+) (dto.User, error) {
+	record, err := mapper.UserToDB(user)
+	if err != nil {
+		return dto.User{}, err
+	}
+
+	selectQuery := fmt.Sprintf(`
+        SELECT
+            id,
+            username,
+            email,
+            display_name,
+            bio,
+            password_hash,
+            created_at
+        FROM users
+        WHERE id = %d
+    `,
+		record.ID,
+	)
+
+	err = r.pool.QueryRow(ctx, selectQuery).Scan(
+		&record.ID,
+		&record.Username,
+		&record.Email,
+		&record.DisplayName,
+		&record.Bio,
+		&record.PasswordHash,
+		&record.CreatedAt,
+	)
+	if err != nil {
+		return dto.User{}, mapError(err)
+	}
+
+	updateProfileQuery := fmt.Sprintf(`
+        UPDATE users
+        SET username = '%s',
+            display_name = '%s'
+        WHERE id = %d
+    `,
+		user.Username,
+		user.DisplayName,
+		record.ID,
+	)
+
+	_, err = r.pool.Exec(ctx, updateProfileQuery)
+	if err != nil {
+		return dto.User{}, mapError(err)
+	}
+
+	updateBioQuery := fmt.Sprintf(`
+        UPDATE users SET bio = '%s' WHERE id = %d
+    `,
+		user.Bio,
+		record.ID,
+	)
+
+	_, err = r.pool.Exec(ctx, updateBioQuery)
+	if err != nil {
+		return dto.User{}, mapError(err)
+	}
+
+	record.Username = user.Username
+	record.DisplayName = user.DisplayName
+	record.Bio = user.Bio
+
+	return mapper.UserToDTO(record), nil
+}
+
 func (r *UserRepository) scanOne(
 	ctx context.Context,
 	query string,

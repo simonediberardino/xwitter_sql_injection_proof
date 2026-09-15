@@ -130,3 +130,67 @@ func (c *Controller) Me(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{"user": user})
 }
+
+func (c *Controller) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	var req dto.UpdateProfileRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON body")
+		return
+	}
+
+	claims := auth.UserFromRequest(r)
+	user, err := c.users.FindByID(r.Context(), dto.User{ID: claims.ID})
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			writeError(w, http.StatusUnauthorized, "Account no longer exists")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	username := strings.TrimSpace(req.Username)
+	displayName := strings.TrimSpace(req.DisplayName)
+	bio := strings.TrimSpace(req.Bio)
+	if username == "" {
+		username = user.Username
+	}
+	if displayName == "" {
+		displayName = user.DisplayName
+	}
+
+	switch {
+	case !usernameRE.MatchString(username):
+		writeError(w, http.StatusBadRequest, "Username must be 3-20 characters and use only letters, numbers, or underscores")
+		return
+	case len(displayName) < 2 || len(displayName) > 40:
+		writeError(w, http.StatusBadRequest, "Display name must be 2-40 characters")
+		return
+	case len(bio) > 160:
+		writeError(w, http.StatusBadRequest, "Bio must be 160 characters or less")
+		return
+	}
+
+	updated, err := c.users.UpdateProfile(r.Context(), dto.User{
+		ID:          user.ID,
+		Username:    username,
+		DisplayName: displayName,
+		Bio:         bio,
+	})
+	if err != nil {
+		if errors.Is(err, db.ErrDuplicate) {
+			writeError(w, http.StatusConflict, "Username is already taken")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	token, err := c.auth.Sign(updated.ID, updated.Username)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, dto.AuthResponse{Token: token, User: updated})
+}

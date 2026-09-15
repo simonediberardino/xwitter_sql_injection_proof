@@ -51,6 +51,12 @@ type SearchQuery struct {
 	Query string `json:"q"`
 }
 
+type UpdateProfileRequest struct {
+	Username    string `json:"username"`
+	DisplayName string `json:"displayName"`
+	Bio         string `json:"bio"`
+}
+
 type PostFilter struct {
 	UserID string `json:"userId"`
 }
