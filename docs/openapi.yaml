@@ -1,0 +1,660 @@
+openapi: 3.0.3
+info:
+  title: Xwitter API
+  description: |
+    HTTP API of the Xwitter social application.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:4000
+    description: Backend
+
+tags:
+  - name: Health
+    description: Process liveness
+  - name: Auth
+    description: Registration, login, and current-user profile
+  - name: Posts
+    description: Timeline and post creation
+  - name: Users
+    description: Public profiles, user posts, and search
+
+security: []
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      operationId: getHealth
+      responses:
+        "200":
+          description: The process is running.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ok
+
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new account
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+            example:
+              username: alice
+              email: alice@example.com
+              displayName: Alice
+              password: secret123
+              bio: Hello from Xwitter
+      responses:
+        "201":
+          description: Account created. A JWT is returned together with the user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Invalid JSON or failed field validation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalidJson:
+                  value:
+                    error: Invalid JSON body
+                username:
+                  value:
+                    error: Username must be 3-20 characters and use only letters, numbers, or underscores
+                email:
+                  value:
+                    error: Enter a valid email address
+                displayName:
+                  value:
+                    error: Display name must be 2-40 characters
+                password:
+                  value:
+                    error: Password must be at least 8 characters
+                bio:
+                  value:
+                    error: Bio must be 160 characters or less
+        "409":
+          description: Username or email is already taken.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: Username or email is already taken
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in with username or email
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            example:
+              identifier: alice
+              password: secret123
+      responses:
+        "200":
+          description: Credentials accepted. A JWT is returned together with the user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Invalid JSON, or identifier/password missing.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalidJson:
+                  value:
+                    error: Invalid JSON body
+                missingFields:
+                  value:
+                    error: Username/email and password are required
+        "401":
+          description: Unknown identifier or wrong password.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: Invalid credentials
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Current authenticated user
+      operationId: me
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The user bound to the JWT.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/auth/profile:
+    post:
+      tags: [Auth]
+      summary: Update the current user's profile
+      description: |
+        Update the current user's profile.
+      operationId: updateProfile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+            example:
+              username: alice
+              displayName: Alice A.
+              bio: Updated bio
+      responses:
+        "200":
+          description: Profile updated. A new JWT is returned together with the user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Invalid JSON or failed field validation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalidJson:
+                  value:
+                    error: Invalid JSON body
+                username:
+                  value:
+                    error: Username must be 3-20 characters and use only letters, numbers, or underscores
+                displayName:
+                  value:
+                    error: Display name must be 2-40 characters
+                bio:
+                  value:
+                    error: Bio must be 160 characters or less
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: The new username is already taken.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: Username is already taken
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/posts:
+    get:
+      tags: [Posts]
+      summary: List the public timeline
+      description: Returns up to 100 posts, newest first. No authentication required.
+      operationId: listPosts
+      responses:
+        "200":
+          description: Timeline posts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostsEnvelope"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [Posts]
+      summary: Create a post
+      operationId: createPost
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePostRequest"
+            example:
+              content: Hello Xwitter
+      responses:
+        "201":
+          description: Post created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostEnvelope"
+        "400":
+          description: Invalid JSON or failed content validation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalidJson:
+                  value:
+                    error: Invalid JSON body
+                empty:
+                  value:
+                    error: Post cannot be empty
+                tooLong:
+                  value:
+                    error: Post must be 280 characters or less
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/users/search:
+    post:
+      tags: [Users]
+      summary: Search users by username
+      description: |
+        Search users by username.
+      operationId: searchUsers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchQuery"
+            example:
+              q: ali
+      responses:
+        "200":
+          description: Matching users (possibly empty).
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: array
+                    items: {}
+                    maxItems: 0
+                    description: Empty query.
+                  - type: array
+                    items:
+                      $ref: "#/components/schemas/SearchUserRow"
+              examples:
+                emptyQuery:
+                  value: []
+                matches:
+                  value:
+                    - id: 1
+                      username: alice
+                      display_name: Alice
+                      bio: Hello from Xwitter
+                      created_at: "2026-09-18T16:00:00Z"
+        "400":
+          description: Invalid JSON body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: Invalid JSON body
+        "500":
+          description: Server error. The message may include the underlying error text.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "Internal server error: ..."
+
+  /api/users/{username}:
+    get:
+      tags: [Users]
+      summary: Get a public user profile
+      operationId: getUser
+      parameters:
+        - $ref: "#/components/parameters/UsernamePath"
+      responses:
+        "200":
+          description: Public profile, including `postCount`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserEnvelope"
+        "404":
+          $ref: "#/components/responses/UserNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/users/{username}/posts:
+    get:
+      tags: [Users]
+      summary: List posts by a user
+      description: Returns up to 100 posts for the given username, newest first.
+      operationId: getUserPosts
+      parameters:
+        - $ref: "#/components/parameters/UsernamePath"
+      responses:
+        "200":
+          description: The user's posts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostsEnvelope"
+        "404":
+          $ref: "#/components/responses/UserNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT.
+
+  parameters:
+    UsernamePath:
+      name: username
+      in: path
+      required: true
+      description: Account username.
+      schema:
+        type: string
+        minLength: 1
+        example: alice
+
+  responses:
+    Unauthorized:
+      description: |
+        Unauthorized.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            missing:
+              value:
+                error: Authentication required
+            invalid:
+              value:
+                error: Invalid or expired token
+            gone:
+              value:
+                error: Account no longer exists
+    UserNotFound:
+      description: No user with that username.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: User not found
+    InternalError:
+      description: Unexpected server error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: Internal server error
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error:
+          type: string
+          description: Error message.
+
+    HealthResponse:
+      type: object
+      required: [status]
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum: [ok]
+
+    User:
+      type: object
+      required:
+        - id
+        - username
+        - displayName
+        - bio
+        - createdAt
+        - postCount
+      additionalProperties: false
+      description: |
+        Public user object.
+      properties:
+        id:
+          type: string
+          description: Numeric user id serialized as a string.
+          example: "1"
+        username:
+          type: string
+          minLength: 3
+          maxLength: 20
+          pattern: "^[a-zA-Z0-9_]{3,20}$"
+          example: alice
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 40
+          example: Alice
+        bio:
+          type: string
+          maxLength: 160
+          example: Hello from Xwitter
+        createdAt:
+          type: string
+          format: date-time
+          description: date-time.
+          example: "2026-09-18T16:00:00Z"
+        postCount:
+          type: string
+          description: |
+            Number of posts.
+          example: "3"
+
+    Author:
+      type: object
+      required: [id, username, displayName]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          example: "1"
+        username:
+          type: string
+          example: alice
+        displayName:
+          type: string
+          example: Alice
+
+    Post:
+      type: object
+      required: [id, content, createdAt, author]
+      additionalProperties: false
+      description: |
+        Public post.
+      properties:
+        id:
+          type: string
+          description: Numeric post id serialized as a string.
+          example: "10"
+        content:
+          type: string
+          maxLength: 280
+          example: Hello Xwitter
+        createdAt:
+          type: string
+          format: date-time
+          description: UTC RFC3339 timestamp.
+          example: "2026-09-18T16:05:00Z"
+        author:
+          $ref: "#/components/schemas/Author"
+
+    UserEnvelope:
+      type: object
+      required: [user]
+      additionalProperties: false
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+
+    PostEnvelope:
+      type: object
+      required: [post]
+      additionalProperties: false
+      properties:
+        post:
+          $ref: "#/components/schemas/Post"
+
+    PostsEnvelope:
+      type: object
+      required: [posts]
+      additionalProperties: false
+      properties:
+        posts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Post"
+
+    AuthResponse:
+      type: object
+      required: [token, user]
+      additionalProperties: false
+      properties:
+        token:
+          type: string
+          description: JWT, valid for 7 days.
+        user:
+          $ref: "#/components/schemas/User"
+
+    RegisterRequest:
+      type: object
+      required: [username, email, displayName, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 20
+          pattern: "^[a-zA-Z0-9_]{3,20}$"
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 40
+        password:
+          type: string
+          minLength: 8
+          format: password
+        bio:
+          type: string
+          maxLength: 160
+          default: ""
+
+    LoginRequest:
+      type: object
+      required: [identifier, password]
+      additionalProperties: false
+      properties:
+        identifier:
+          type: string
+          description: Username or email.
+          minLength: 1
+        password:
+          type: string
+          format: password
+          minLength: 1
+
+    UpdateProfileRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        username:
+          type: string
+          description: New username
+        displayName:
+          type: string
+          description: New display name
+        bio:
+          type: string
+          maxLength: 160
+          description: New bio
+
+    CreatePostRequest:
+      type: object
+      required: [content]
+      additionalProperties: false
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 280
+          description: Post body
+
+    SearchQuery:
+      type: object
+      properties:
+        q:
+          type: string
+          description: Username search string (trimmed)
+          example: ali
+
+    SearchUserRow:
+      type: object
+      description: Search user row
+      additionalProperties: true
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        username:
+          type: string
+          example: alice
+        display_name:
+          type: string
+          example: Alice
+        bio:
+          type: string
+          example: Hello from Xwitter
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-09-18T16:00:00Z"
